@@ -3,7 +3,8 @@
 
 import numpy as np
 from scipy.spatial import ConvexHull
-from numpy import *
+from matplotlib import pyplot as plt 
+from itertools import combinations
 
 def polygon_clip(subjectPolygon, clipPolygon):
    """ Clip a polygon with another polygon.
@@ -116,7 +117,7 @@ def box3d_iou(corners1, corners2):
 # Helper functions for evaluation
 # ----------------------------------
 
-def get_3d_box(box_size, heading_angle, center):
+def get_3d_box_old(box_size, heading_angle, center):
     ''' Calculate 3D bounding box corners from its parameterization.
 
     Input:
@@ -135,9 +136,9 @@ def get_3d_box(box_size, heading_angle, center):
 
     R = roty(heading_angle)
     l,w,h = box_size
-    x_corners = [l/2,l/2,-l/2,-l/2,l/2,l/2,-l/2,-l/2];
-    y_corners = [h/2,h/2,h/2,h/2,-h/2,-h/2,-h/2,-h/2];
-    z_corners = [w/2,-w/2,-w/2,w/2,w/2,-w/2,-w/2,w/2];
+    x_corners = np.array([l,l,-l,-l,l,l,-l,-l])*0.5
+    y_corners = np.array([h,h,h,h,-h,-h,-h,-h])*0.5
+    z_corners = np.array([w,-w,-w,w,w,-w,-w,w])*0.5
     corners_3d = np.dot(R, np.vstack([x_corners,y_corners,z_corners]))
     corners_3d[0,:] = corners_3d[0,:] + center[0];
     corners_3d[1,:] = corners_3d[1,:] + center[1];
@@ -145,12 +146,49 @@ def get_3d_box(box_size, heading_angle, center):
     corners_3d = np.transpose(corners_3d)
     return corners_3d
 
+def get_3d_box(box_size, rotation, center):
+    ''' Calculate 3D bounding box corners from its parameterization.
+
+    Input:
+        box_size: tuple of (length,wide,height)
+        rotation: tuple of rotations
+        center: tuple of (x,y,z)
+    Output:
+        corners_3d: numpy array of shape (8,3) for 3D box cornders
+    '''
+    l,w,h = box_size
+
+    box = np.array([
+        [ l, w, h],
+        [-l, w, h],
+        [ l,-w, h],
+        [ l, w,-h],
+        [-l,-w, h],
+        [ l,-w,-h],
+        [-l,-w,-h],
+        [-l, w,-h],
+    ])*0.5 + center
+
+    if any(rotation):
+        sz, sy, sx = np.sin(rotation)
+        cz, cy, cx = np.cos(rotation)
+        R = np.array([
+            [cx*cy, cx*sy*sz-sx*cz, cx*sy*cz+sx*sz],
+            [sx*cy, sx*sy*sz+cx*cz, sx*sy*cz-cx*sz],
+            [  -sy,          cy*sz,          cy*cz],
+        ])
+        box = box@R
+
+    return box
+
+    # corners_3d = R@np.vstack([x_corners,y_corners,z_corners])
+    # corners_3d[0,:] = corners_3d[0,:] + center[0];
+    # corners_3d[1,:] = corners_3d[1,:] + center[1];
+    # corners_3d[2,:] = corners_3d[2,:] + center[2];
+    # return corners_3d.T
+
+if __name__ == '__main__':
+    get_3d_box([1,1,1],[0.5,0,0],[0,0,0])
+
     
-if __name__=='__main__':
-    print('------------------')
-    # get_3d_box(box_size, heading_angle, center)
-    corners_3d_ground  = get_3d_box((1.497255,1.644981, 3.628938), -1.531692, (2.882992 ,1.698800 ,20.785644)) 
-    corners_3d_predict = get_3d_box((1.458242, 1.604773, 3.707947), -1.549553, (2.756923, 1.661275, 20.943280 ))
-    (IOU_3d,IOU_2d)=box3d_iou(corners_3d_predict,corners_3d_ground)
-    print (IOU_3d,IOU_2d) #3d IoU/ 2d IoU of BEV(bird eye's view)
-      
+
