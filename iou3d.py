@@ -50,11 +50,18 @@ def polygon_clip(subjectPolygon, clipPolygon):
       cp1 = cp2
       if len(outputList) == 0:
           return None
-   return(outputList)
+   return outputList
 
 def poly_area(x,y):
     """ Ref: http://stackoverflow.com/questions/24467972/calculate-area-of-polygon-given-x-y-coordinates """
-    return 0.5*np.abs(np.dot(x,np.roll(y,1))-np.dot(y,np.roll(x,1)))
+    # return 0.5*np.abs(np.dot(x,np.roll(y,1))-np.dot(y,np.roll(x,1)))
+    # coordinate shift
+    x_ = x - x.mean()
+    y_ = y - y.mean()
+    # everything else is the same as maxb's code
+    correction = x_[-1] * y_[0] - y_[-1]* x_[0]
+    main_area = np.dot(x_[:-1], y_[1:]) - np.dot(y_[:-1], x_[1:])
+    return 0.5*np.abs(main_area + correction)
 
 def convex_hull_intersection(p1, p2):
     """ Compute area of two convex hull's intersection area.
@@ -125,6 +132,14 @@ def box3d_iou(corners1, corners2):
 # ----------------------------------
 # Helper functions for evaluation
 # ----------------------------------
+def get_rotation_matrix(rotation: np.ndarray):
+    sz, sy, sx = np.sin(rotation)
+    cz, cy, cx = np.cos(rotation)
+    return np.array([ # Multiply with rotation matrix
+        [cx*cy, cx*sy*sz-sx*cz, cx*sy*cz+sx*sz],
+        [sx*cy, sx*sy*sz+cx*cz, sx*sy*cz-cx*sz],
+        [  -sy,          cy*sz,          cy*cz],
+    ])
 
 def get_3d_box(box_size, rotation, center):
     ''' Calculate 3D bounding box corners from its parameterization.
@@ -137,7 +152,6 @@ def get_3d_box(box_size, rotation, center):
         corners_3d: numpy array of shape (8,3) for 3D box corners
     '''
     l,w,h = box_size
-
     box = np.array([
         [ l, w, h],
         [ l, w,-h],
@@ -147,18 +161,10 @@ def get_3d_box(box_size, rotation, center):
         [ l,-w,-h],
         [-l,-w,-h],
         [-l,-w, h],
-    ])*0.5 + center
-
+    ])*0.5
     if any(rotation):
-        sz, sy, sx = np.sin(rotation)
-        cz, cy, cx = np.cos(rotation)
-        box = box@np.array([ # Multiply with rotation matrix
-            [cx*cy, cx*sy*sz-sx*cz, cx*sy*cz+sx*sz],
-            [sx*cy, sx*sy*sz+cx*cz, sx*sy*cz-cx*sz],
-            [  -sy,          cy*sz,          cy*cz],
-        ])
-
-    return box
+        box = box@get_rotation_matrix(rotation)
+    return box + center
 
     
 if __name__=='__main__':
